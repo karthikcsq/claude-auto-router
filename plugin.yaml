@@ -1,0 +1,15 @@
+name: claude-auto-router
+version: 1.8.0
+description: "Automatically routes substantial engineering work from Hermes to Sol or Claude Code without user prompting."
+author: Karthik Thyagarajan
+kind: standalone
+provides_hooks:
+  - pre_llm_call
+  - transform_tool_result
+provides_tools:
+  - claude_code_dispatch
+  - claude_code_message
+  - claude_code_close
+  - claude_code_status
+  - claude_code_list
+  - claude_code_restart
