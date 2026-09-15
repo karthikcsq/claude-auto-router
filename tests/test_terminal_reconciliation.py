@@ -26,6 +26,7 @@ import pytest
 
 from conftest import (
     FakeRegistry, FakeSession, exit_during_grace, install_fake_rail, load_router,
+    spawn_writable,
 )
 
 RESULT_OK = '{"type":"result","subtype":"success","num_turns":4,"duration_ms":900}\n'
@@ -286,10 +287,10 @@ def test_real_managed_process_exit_after_close_converges_by_itself(
     _ban_status_polls(router, monkeypatch)
 
     result_line = RESULT_OK.strip()
-    session = real_registry.spawn_local(
+    session = spawn_writable(
+        real_registry,
         f"cat > /dev/null; sleep 1; printf '%s\\n' '{result_line}'; exit 0",
         cwd=str(workdir),
-        keep_stdin_open=True,
     )
     watcher = router._register_completion_watcher(session.id, {})
     assert watcher["registered"] is True, watcher

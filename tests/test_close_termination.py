@@ -21,6 +21,7 @@ import pytest
 
 from conftest import (
     FakeRegistry, FakeSession, exit_during_grace, install_fake_rail, load_router,
+    spawn_writable,
 )
 
 RESULT_OK = '{"type":"result","subtype":"success","num_turns":4,"duration_ms":900}\n'
@@ -301,10 +302,10 @@ def test_real_child_that_ignores_stdin_is_actually_terminated(
     _ban_status_polls(router, monkeypatch)
     router.CLOSE_GRACE_SECONDS = 1.0
 
-    session = real_registry.spawn_local(
+    session = spawn_writable(
+        real_registry,
         "while true; do sleep 0.2; done",
         cwd=str(workdir),
-        keep_stdin_open=True,
     )
     pid = session.pid
     job_id = "claude-realhang01"
@@ -344,10 +345,10 @@ def test_real_child_exiting_during_grace_is_not_force_killed(
     router.CLOSE_GRACE_SECONDS = 20.0
 
     result_line = RESULT_OK.strip()
-    session = real_registry.spawn_local(
+    session = spawn_writable(
+        real_registry,
         f"cat > /dev/null; sleep 0.5; printf '%s\\n' '{result_line}'; exit 0",
         cwd=str(workdir),
-        keep_stdin_open=True,
     )
     job_id = "claude-realgrace1"
     _real_job(router, real_registry, session, workdir, runs_dir, job_id)

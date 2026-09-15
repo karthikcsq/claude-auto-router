@@ -8,6 +8,7 @@ whole dispatch/status lifecycle deterministically — no Claude CLI, no gateway.
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
 import sys
 import threading
@@ -17,6 +18,16 @@ from pathlib import Path
 import pytest
 
 PLUGIN = Path(__file__).parents[1] / "__init__.py"
+
+
+def spawn_writable(registry, command: str, *, cwd: str):
+    """Start a writable real Hermes session across old and current rails."""
+    parameters = inspect.signature(registry.spawn_local).parameters
+    if "keep_stdin_open" in parameters:
+        return registry.spawn_local(
+            command, cwd=cwd, keep_stdin_open=True
+        )
+    return registry.spawn_local(command, cwd=cwd, use_pty=True)
 
 
 def load_router(runs_dir: Path):
