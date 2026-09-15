@@ -1,20 +1,22 @@
-# Claude Auto Router for Hermes
+# Claude Auto Router
 
-Claude Auto Router adds durable Claude Code jobs to [Hermes Agent](https://hermes-agent.nousresearch.com/). It is useful when a request needs a longer engineering pass than a normal chat turn: implementing a feature, investigating a hard bug, running tests, or reviewing a change in an existing repository.
+Claude Auto Router adds durable Claude Code jobs to Hermes Agent and Codex. It
+provides host-native adapters for dispatch, follow-up messages, status,
+completion delivery, listing, graceful close, and controlled restart.
 
-It gives Hermes a small set of tools to start, follow, inspect, stop, and, when appropriate, replace Claude Code sessions.
+The Hermes adapter is the root plugin. The Codex adapter lives in
+[`adapters/codex`](adapters/codex/README.md) and runs as a local stdio MCP
+server with Codex app-server completion callbacks.
 
 ## Before you start
 
-You need:
-
-- Hermes Agent installed and running
-- Claude Code installed and authenticated on the same machine
-- an existing local repository or project directory for Claude to work in
+You need Claude Code installed and authenticated on the same machine, plus an
+existing local repository or project directory. Then choose either Hermes or
+Codex as the coordinator.
 
 The plugin uses the Claude Code model aliases `opus` and `fable`. It intentionally does not offer Sonnet.
 
-## Install
+## Install for Hermes
 
 Clone this repository into your Hermes plugins directory:
 
@@ -23,15 +25,26 @@ git clone https://github.com/karthikcsq/claude-auto-router.git ~/.hermes/plugins
 hermes gateway restart
 ```
 
-After the gateway restarts, ask Hermes to list active Claude sessions. A successful response includes the loaded plugin version.
+After the gateway restarts, ask Hermes to list active Claude sessions. To
+update later, run `git pull` in the plugin directory and restart the gateway.
 
-To update later:
+## Install for Codex
+
+Keep the clone at a stable absolute path, then run:
 
 ```bash
-cd ~/.hermes/plugins/claude-auto-router
-git pull
-hermes gateway restart
+claude auth status
+./adapters/codex/install.sh /absolute/allowed/project/root
 ```
+
+The installer registers the repository adapter as the global
+`claude_delegation` stdio MCP server. It also installs the wake/restart callback
+LaunchAgent, writes machine-specific configuration outside the repository, and
+merges the routing hook into `~/.codex/hooks.json` without replacing unrelated
+hooks. Open a new Codex task, run `/mcp`, and confirm the six tools listed below.
+
+See [the Codex adapter guide](adapters/codex/README.md) for exact configuration,
+security boundaries, callback behavior, and tests.
 
 ## The basic workflow
 
@@ -52,7 +65,7 @@ Example dispatch:
 }
 ```
 
-Hermes returns a job ID such as `claude-abc123`. Keep it for the remaining lifecycle actions.
+The adapter returns a job ID such as `claude-abc123`. Keep it for the remaining lifecycle actions.
 
 ## Available tools
 
@@ -112,7 +125,10 @@ Ends an active session permanently after its final work has been verified.
 { "job_id": "claude-abc123" }
 ```
 
-Close is intentionally irreversible. It gives Claude a short chance to exit cleanly, then terminates the managed process if it remains alive. Do not close a job if you expect to send more requirements.
+Close is intentionally irreversible. Hermes sends EOF and then terminates a
+stuck managed process after a short grace. Codex records a durable close request
+and lets the in-flight Claude turn finish before the worker exits. Do not close
+a job if you expect to send more requirements.
 
 ### `claude_code_restart`
 
@@ -127,13 +143,13 @@ Use this only when a non-Fable session was closed too early and must continue wi
 
 Restart creates one explicit replacement job with a recorded relationship to the closed job. It does not silently retry failed work, and it does not reopen the old session's stdin.
 
-## Approval requests
+## Approval requests in Hermes
 
 A job can enter `action_required` when Claude needs a human approval or permission decision. That is not a failure.
 
 Read the reported summary, make the decision yourself, then send your decision to the same job with `claude_code_message`. The router never approves actions on your behalf.
 
-## Running two independent jobs
+## Running two independent Hermes jobs
 
 The default is one Claude parent job per coordinator turn. For two genuinely independent jobs in the same turn, both dispatches must opt in with different `parallel_lane` names and must use separate isolated checkouts.
 
