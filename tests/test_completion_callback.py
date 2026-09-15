@@ -34,6 +34,23 @@ def status(router, job_id: str) -> dict:
     return json.loads(router.handle_status({"job_id": job_id}))
 
 
+def test_terminal_launch_options_cover_old_and_current_hermes(router):
+    def legacy_terminal(*, pty=False, keep_stdin_open=False):
+        pass
+
+    def current_terminal(*, pty=False, _host_local=False):
+        pass
+
+    assert router._terminal_launch_options(legacy_terminal) == {
+        "pty": False,
+        "keep_stdin_open": True,
+    }
+    assert router._terminal_launch_options(current_terminal) == {
+        "pty": True,
+        "_host_local": True,
+    }
+
+
 # --------------------------------------------------------------------------
 # 1. Callback registration — the exact wiring, not a claim about it
 # --------------------------------------------------------------------------
@@ -50,6 +67,7 @@ def test_dispatch_registers_a_completion_watcher_alongside_the_result_watch(
     # The live per-turn signal is preserved...
     assert calls[0]["watch_patterns"] == ['"type":"result"']
     assert calls[0]["keep_stdin_open"] is True
+    assert calls[0]["pty"] is False
     assert calls[0]["background"] is True
     # ...and the terminal signal is armed on the same managed session.
     assert session.notify_on_complete is True

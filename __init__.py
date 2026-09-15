@@ -7,6 +7,7 @@ and persists a small, inspectable job record for later status checks.
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import re
@@ -46,6 +47,29 @@ PLUGIN_LOADED_AT = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 def _loaded_code() -> dict[str, str]:
     return {"plugin_version": PLUGIN_VERSION, "plugin_loaded_at": PLUGIN_LOADED_AT}
+
+
+def _terminal_launch_options(terminal_tool) -> dict[str, Any]:
+    """Keep Claude's stdin writable across old and current Hermes rails."""
+    try:
+        parameters = inspect.signature(terminal_tool).parameters
+    except (TypeError, ValueError):
+        parameters = {}
+    accepts_arbitrary = any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters.values()
+    )
+    if "keep_stdin_open" in parameters or accepts_arbitrary:
+        options: dict[str, Any] = {"pty": False, "keep_stdin_open": True}
+    else:
+        # Current Hermes keeps pipe-mode background stdin closed. Its supported
+        # writable process rail is a background PTY driven by ProcessRegistry.
+        options = {"pty": True}
+    if "_host_local" in parameters:
+        # Claude Code is authenticated on the coordinator host. Do not inherit
+        # a Docker or cloud terminal backend selected for ordinary agent tools.
+        options["_host_local"] = True
+    return options
 
 
 MAX_TASK_CHARS = 16_000
@@ -1681,15 +1705,20 @@ Read the latest entry when you receive a follow-up, then update the status file 
     # session alive, while a result-event watch injects a callback after each
     # completed Claude turn into the originating gateway conversation.
     from tools.terminal_tool import terminal_tool
+    terminal_options = _terminal_launch_options(terminal_tool)
+    launch_command = stream_command
+    if terminal_options["pty"]:
+        # A PTY echoes writes by default, which would copy follow-up prompts
+        # into process logs. Disable echo before the stdin relay starts.
+        launch_command = f"stty -echo 2>/dev/null || true; {stream_command}"
     launch = json.loads(terminal_tool(
-        command=stream_command,
+        command=launch_command,
         background=True,
         watch_patterns=['"type":"result"'],
-        pty=False,
-        keep_stdin_open=True,
         workdir=str(workdir),
         task_id=str(kw.get("task_id") or "") or None,
         session_id=str(kw.get("session_id") or "") or None,
+        **terminal_options,
     ))
     process_session_id = str(launch.get("session_id") or "").strip()
     if not process_session_id:

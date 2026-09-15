@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import load_router
+from conftest import load_router, spawn_writable
 
 HERMES_AGENT = Path(
     os.environ.get("HERMES_AGENT_DIR", Path.home() / ".hermes" / "hermes-agent")
@@ -237,7 +237,7 @@ def test_queued_follow_ups_are_consumable_stream_json_lines(
         "{ printf '%s\\n' " + shlex.quote(first) + "; cat; } | "
         "while IFS= read -r line; do printf 'EVENT|%s\\n' \"$line\"; done"
     )
-    session = registry.spawn_local(command, cwd=str(workdir), keep_stdin_open=True)
+    session = spawn_writable(registry, command, cwd=str(workdir))
     try:
         for text in ("follow up one", "follow up two"):
             delivery = router._submit_stream_event(

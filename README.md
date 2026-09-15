@@ -18,15 +18,18 @@ The plugin uses the Claude Code model aliases `opus` and `fable`. It intentional
 
 ## Install for Hermes
 
-Clone this repository into your Hermes plugins directory:
+Use Hermes's plugin installer so it scans the repository, records its source,
+and enables the root plugin explicitly:
 
 ```bash
-git clone https://github.com/karthikcsq/claude-auto-router.git ~/.hermes/plugins/claude-auto-router
+hermes plugins install karthikcsq/claude-auto-router --enable
 hermes gateway restart
 ```
 
 After the gateway restarts, ask Hermes to list active Claude sessions. To
-update later, run `git pull` in the plugin directory and restart the gateway.
+update later, run `hermes plugins update claude-auto-router` and restart the
+gateway. The nested `adapters/codex` directory is inert in Hermes: Hermes loads
+the root `plugin.yaml` and `__init__.py` as one plugin.
 
 ## Install for Codex
 

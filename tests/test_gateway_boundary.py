@@ -67,7 +67,17 @@ def _manifest_version(plugin_dir: Path) -> str:
 
 def _load_like_the_gateway(hp, manager, plugin_dir: Path):
     """Import + register one directory plugin through the gateway's loader."""
-    manifest = manager._parse_manifest(plugin_dir / "plugin.yaml", plugin_dir, "user", "")
+    # Hermes kept manifest parsing on PluginManager in older releases and
+    # moved it to plugins_manifest.parse_manifest_file in newer releases.
+    # Use the same implementation exported by the installed Hermes version.
+    if hasattr(manager, "_parse_manifest"):
+        manifest = manager._parse_manifest(
+            plugin_dir / "plugin.yaml", plugin_dir, "user", ""
+        )
+    else:
+        manifest = hp.parse_manifest_file(
+            plugin_dir / "plugin.yaml", plugin_dir, "user", ""
+        )
     assert manifest is not None, "plugin.yaml did not parse"
     manager._load_plugin(manifest)
     loaded = manager._plugins[manifest.key or manifest.name]
@@ -76,6 +86,26 @@ def _load_like_the_gateway(hp, manager, plugin_dir: Path):
     assert module.__name__ == MODULE_NAME
     assert sys.modules[MODULE_NAME] is module
     return manifest, module
+
+
+def test_full_repository_tree_is_one_hermes_plugin(tmp_path):
+    """The nested Codex adapter must not become a second Hermes plugin."""
+    if str(HERMES_AGENT) not in sys.path:
+        sys.path.insert(0, str(HERMES_AGENT))
+    from hermes_cli import plugins as hp
+
+    plugins_dir = tmp_path / "plugins"
+    installed = plugins_dir / "claude-auto-router"
+    installed.mkdir(parents=True)
+    shutil.copy(PLUGIN_DIR / "__init__.py", installed / "__init__.py")
+    shutil.copy(PLUGIN_DIR / "plugin.yaml", installed / "plugin.yaml")
+    shutil.copytree(PLUGIN_DIR / "adapters", installed / "adapters")
+
+    manifests = hp.scan_directory(plugins_dir, "user")
+
+    assert len(manifests) == 1
+    assert manifests[0].name == "claude-auto-router"
+    assert Path(manifests[0].path) == installed
 
 
 class GatewayRail:
